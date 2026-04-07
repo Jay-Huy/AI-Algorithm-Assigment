@@ -17,6 +17,19 @@ from torchvision.transforms import CenterCrop, Compose, Normalize, Resize, ToTen
 from diffusers.pipelines import DiffusionPipeline
 
 
+_CLIP_RUNTIME_CACHE = {}
+
+
+def _get_clip_runtime(clip_model: str, n_px: int = 224, device: str | None = None):
+    runtime_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+    cache_key = (clip_model, n_px, runtime_device)
+    if cache_key not in _CLIP_RUNTIME_CACHE:
+        model, _ = clip.load(clip_model, device=runtime_device)
+        image_preprocess, text_preprocess = get_clip_preprocess(n_px)
+        _CLIP_RUNTIME_CACHE[cache_key] = (model, image_preprocess, text_preprocess, runtime_device)
+    return _CLIP_RUNTIME_CACHE[cache_key]
+
+
 def get_clip_preprocess(n_px=224):
     def Convert(image):
         return image.convert("RGB")
@@ -48,6 +61,12 @@ def clip_score(
     clip_model: str = "ViT-B/32",
     n_px: int = 224,
     cross_matching: bool = False,
+    use_weight: bool = True,
+    clamp_min_zero: bool = True,
+    model=None,
+    image_preprocess=None,
+    text_preprocess=None,
+    device: str | None = None,
 ):
     """
     Compute CLIPScore (https://arxiv.org/abs/2104.08718) for generated images according to their prompts.
@@ -67,6 +86,10 @@ def clip_score(
     Returns:
         score (np.ndarray): The CLIPScore of generated images.
             size: (len(images), )
+
+    Notes:
+        - Default behavior follows CLIPScore-style scaling/clamping.
+        - Set use_weight=False and clamp_min_zero=False to get raw cosine similarity.
     """
     if isinstance(texts, str):
         texts = [texts]
@@ -84,30 +107,43 @@ def clip_score(
     else:
         assert isinstance(images[0], Image.Image), "Invalid image type."
 
-    model, _ = clip.load(clip_model, device="cuda")
-    image_preprocess, text_preprocess = get_clip_preprocess(
-        n_px
-    )  # following the official implementation, rather than using the default CLIP preprocess
+    if model is None or image_preprocess is None or text_preprocess is None:
+        model, image_preprocess, text_preprocess, runtime_device = _get_clip_runtime(
+            clip_model=clip_model,
+            n_px=n_px,
+            device=device,
+        )
+    else:
+        runtime_device = device or ("cuda" if torch.cuda.is_available() else "cpu")
 
     # extract all texts
-    texts_feats = text_preprocess(texts).cuda()
+    texts_feats = text_preprocess(texts).to(runtime_device)
     texts_feats = model.encode_text(texts_feats)
 
     # extract all images
     images_feats = [image_preprocess(img) for img in images]
-    images_feats = torch.stack(images_feats, dim=0).cuda()
+    images_feats = torch.stack(images_feats, dim=0).to(runtime_device)
     images_feats = model.encode_image(images_feats)
 
     # compute the similarity
     images_feats = images_feats / images_feats.norm(dim=1, p=2, keepdim=True)
     texts_feats = texts_feats / texts_feats.norm(dim=1, p=2, keepdim=True)
     if cross_matching:
-        score = w * images_feats @ texts_feats.T
+        score = images_feats @ texts_feats.T
+        if use_weight:
+            score = w * score
         # TODO: the *SUM* here remains to be verified
-        return score.sum(dim=1).clamp(min=0).cpu().numpy()
+        score = score.sum(dim=1)
+        if clamp_min_zero:
+            score = score.clamp(min=0)
+        return score.cpu().numpy()
     else:
-        score = w * images_feats * texts_feats
-        return score.sum(dim=1).clamp(min=0).cpu().numpy()
+        score = (images_feats * texts_feats).sum(dim=1)
+        if use_weight:
+            score = w * score
+        if clamp_min_zero:
+            score = score.clamp(min=0)
+        return score.cpu().numpy()
 
 
 @torch.no_grad()

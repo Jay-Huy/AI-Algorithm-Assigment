@@ -170,7 +170,7 @@ generated_images/
 
 # ide
 .vscode/
-scripts/
+docs/
 debug.py
 
 dump/
