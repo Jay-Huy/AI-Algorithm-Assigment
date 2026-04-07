@@ -85,21 +85,19 @@ def get_dataloader(args, num_processes=1):
 
 
 def get_evaluator(args):
-    evaluator_class = None
+    task_args = parse_extra_args(args.task_args)
+    task_args["save_folder"] = args.img_save_path
+    task_args["output_path"] = args.save_path
+
     if args.task == "general":
-        evaluator_class = ClipEvaluator
-    elif args.task == "artwork":
-        evaluator_class = ArtworkEvaluator
-    elif args.task == "i2p":
-        evaluator_class = I2PEvaluator
-    elif args.task == "coco":
-        evaluator_class = CocoEvaluator
-    else:
-        raise ValueError(f"Unknown task: {args.task}")
-    evaluator = evaluator_class(
-        save_folder=args.img_save_path, output_path=args.save_path
-    )
-    return evaluator
+        return ClipEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
+    if args.task == "artwork":
+        return ArtworkEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
+    if args.task == "i2p":
+        return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
+    if args.task == "coco":
+        return CocoEvaluator(**task_args)
+    raise ValueError(f"Unknown task: {args.task}")
 
 
 def calculate_matching_score(
@@ -376,7 +374,7 @@ if __name__ == "__main__":
             task=general: concepts(list[str]), num_templates(optional, int, default=80), num_images_per_template(optional, int, default=10);
             task=artwork: datasets(list[str]);
             task=i2p: None.
-            task=coco: None.
+            task=coco: coco_image_folder(str), data_path(optional, str, default=benchmark/coco_30k.csv), clip_model(optional, str, default=ViT-B/32), clip_batch_size(optional, int, default=128).
         """,
     )
     parser.add_argument(
