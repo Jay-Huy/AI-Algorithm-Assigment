@@ -5,6 +5,7 @@ from argparse import ArgumentParser
 import pandas as pd
 from prettytable import PrettyTable
 from cleanfid import fid
+from tqdm import tqdm
 
 from src.configs.generation_config import GenerationConfig
 from .eval_util import clip_score
@@ -80,7 +81,7 @@ class CocoEvaluator(Evaluator):
         seeds = []
         missing_ids = []
 
-        for _, row in df.iterrows():
+        for _, row in tqdm(df.iterrows(), total=len(df), desc="Collecting COCO pairs"):
             image_id = int(row["image_id"])
             image_name = f"COCO_val2014_{image_id:012d}.jpg"
             image_path = os.path.join(generated_folder, image_name)
@@ -101,7 +102,7 @@ class CocoEvaluator(Evaluator):
         total_count = 0
         batch_size = max(1, self.clip_batch_size)
 
-        for start in range(0, len(image_paths), batch_size):
+        for start in tqdm(range(0, len(image_paths), batch_size), desc="Computing COCO cosine"):
             end = min(start + batch_size, len(image_paths))
             batch_scores = clip_score(
                 image_paths[start:end],

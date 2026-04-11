@@ -135,3 +135,43 @@ Full 30k run:
 python scripts/kaggle_coco_baseline.py \
   --coco-image-folder /kaggle/input/your-coco-folder
 ```
+
+## 10. Concept Baseline Tasks
+
+Two concept modes are available in `evaluate_task.py`.
+
+### General Concept
+
+Use this for concepts like Superman, Snoopy, Batman, or retain concepts.
+
+```bash
+accelerate launch --num_processes 1 evaluate_task.py \
+  --task general_concept \
+  --task_args concepts=[superman,snoopy] num_samples=20 seed=42 \
+  --img_save_path benchmark/generated_imgs/general_baseline \
+  --save_path benchmark/results/general_baseline \
+  --base_model CompVis/stable-diffusion-v1-4
+```
+
+This uses `ClipTemplateDataset` and `ClipEvaluator` with template prompts from `src/misc/clip_templates.py`.
+
+### Artist Concept
+
+Use this for style concepts like Van Gogh, Picasso, and Caravaggio.
+
+```bash
+accelerate launch --num_processes 1 evaluate_task.py \
+  --task artist_concept \
+  --task_args datasets=[vangogh] num_samples=20 default_seed=42 \
+  --img_save_path benchmark/generated_imgs/artist_baseline \
+  --save_path benchmark/results/artist_baseline \
+  --base_model CompVis/stable-diffusion-v1-4
+```
+
+This uses `ArtworkDataset` and `ArtworkEvaluator` with prompt CSVs such as `benchmark/vangogh_prompts.csv`.
+
+### Sample Count Convention
+
+- COCO: full `coco_30k.csv`
+- General concepts: `num_samples=20` maps to 20 template prompts
+- Artist concepts: `num_samples=20` maps to 20 prompt rows from the CSV

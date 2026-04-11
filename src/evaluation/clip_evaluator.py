@@ -2,6 +2,7 @@ import json
 import os
 import random
 from argparse import ArgumentParser
+
 from prettytable import PrettyTable
 from tqdm import tqdm
 
@@ -18,18 +19,22 @@ class ClipTemplateDataset(GenerationDataset):
         concepts: list[str],
         save_folder: str = "benchmark/generated_imgs/",
         base_cfg: GenerationConfig = GenerationConfig(),
-        num_templates: int = 80,
-        num_images_per_template: int = 10,
-        **kwargs
+        num_samples: int = 80,
+        num_images_per_template: int = 1,
+        seed: int = 42,
+        **kwargs,
     ):
-        assert 1 <= num_templates <= 80, "num_templates should be in range(1, 81)."
+        assert 1 <= num_samples <= len(imagenet_templates), (
+            f"num_samples should be in range(1, {len(imagenet_templates)})."
+        )
+
         meta = {}
         self.data = []
         for concept in concepts:
             meta[concept] = {}
-            sampled_template_indices = random.sample(range(80), num_templates)
+            rng = random.Random(f"{seed}:{concept}")
+            sampled_template_indices = rng.sample(range(len(imagenet_templates)), num_samples)
             for template_idx in sampled_template_indices:
-                # construct cfg
                 cfg = base_cfg.copy()
                 cfg.prompts = [imagenet_templates[template_idx].format(concept)]
                 cfg.generate_num = num_images_per_template
@@ -39,10 +44,10 @@ class ClipTemplateDataset(GenerationDataset):
                     f"{template_idx}" + "_{}.png",
                 )
                 self.data.append(cfg.dict())
-                # construct meta
                 meta[concept][template_idx] = [
                     cfg.save_path.format(i) for i in range(num_images_per_template)
                 ]
+
         os.makedirs(save_folder, exist_ok=True)
         meta_path = os.path.join(save_folder, "meta.json")
         print(f"Saving metadata to {meta_path} ...")
@@ -67,7 +72,7 @@ class ClipEvaluator(Evaluator):
         ...
     }
     CONCEPT_i: str, the i-th concept to be evaluated.
-    TEMPLATE_IDX_i_j: int, range(80), the j-th selected template for CONCEPT_i.
+    TEMPLATE_IDX_i_j: int, range(len(imagenet_templates)), the j-th selected template for CONCEPT_i.
     IMAGE_PATH_i_j_k: str, the k-th image path for CONCEPT_i, TEMPLATE_IDX_i_j.
     """
 
@@ -88,9 +93,13 @@ class ClipEvaluator(Evaluator):
             print(f"Evaluating concept:", concept)
             scores = accs = 0.0
             num_all_images = 0
-            for template_idx, image_paths in tqdm(data.items()):
+            for template_idx, image_paths in tqdm(data.items(), desc=f"{concept} templates"):
                 template_idx = int(template_idx)
-                target_prompt = imagenet_templates[template_idx].format(concept) if self.eval_with_template else concept
+                target_prompt = (
+                    imagenet_templates[template_idx].format(concept)
+                    if self.eval_with_template
+                    else concept
+                )
                 anchor_prompt = anchor_templates[template_idx] if self.eval_with_template else ""
                 num_images = len(image_paths)
                 score, acc = clip_eval_by_image(
@@ -112,7 +121,11 @@ class ClipEvaluator(Evaluator):
             table.add_row([concept, score, all_cers[concept]])
         print(table)
 
-        save_name = "evaluation_results.json" if self.eval_with_template else "evaluation_results(concept only).json"
+        save_name = (
+            "evaluation_results.json"
+            if self.eval_with_template
+            else "evaluation_results(concept only).json"
+        )
         with open(os.path.join(self.output_path, save_name), "w") as f:
             json.dump([all_scores, all_cers], f)
 

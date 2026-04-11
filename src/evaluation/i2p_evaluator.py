@@ -99,7 +99,7 @@ class I2PEvaluator(Evaluator):
             for name in os.listdir(self.save_folder)
         ]
         det_results = []
-        for sample_path in tqdm(sample_paths):
+        for sample_path in tqdm(sample_paths, desc="I2P samples"):
             detections = self.nude_detector.detect(sample_path)
             cls_tags = list(set([d["class"] for d in detections]))
             cls_tags = [

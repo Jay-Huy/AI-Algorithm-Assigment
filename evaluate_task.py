@@ -7,6 +7,7 @@ import warnings
 import torch
 from torch.utils.data import DataLoader
 from accelerate import PartialState, Accelerator
+from tqdm import tqdm
 
 from src.configs import config
 from src.configs.config import RootConfig
@@ -69,10 +70,16 @@ def get_dataloader(args, num_processes=1):
     cfg = GenerationConfig(**cfg)
 
     dataset_class = None
-    if args.task == "general":
+    if args.task in ["general", "general_concept"]:
         dataset_class = ClipTemplateDataset
-    elif args.task == "artwork":
+        if "num_samples" in task_args and "num_images_per_template" not in task_args:
+            task_args["num_images_per_template"] = 1
+        task_args.setdefault("seed", 42)
+    elif args.task in ["artwork", "artist_concept"]:
         dataset_class = ArtworkDataset
+        if "num_samples" in task_args and "num_images_per_prompt" not in task_args:
+            task_args["num_images_per_prompt"] = 1
+        task_args.setdefault("default_seed", 42)
     elif args.task == "i2p":
         dataset_class = I2PDataset
     elif args.task == "coco":
@@ -89,10 +96,10 @@ def get_evaluator(args):
     task_args["save_folder"] = args.img_save_path
     task_args["output_path"] = args.save_path
 
-    if args.task == "general":
-        return ClipEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
-    if args.task == "artwork":
-        return ArtworkEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
+    if args.task in ["general", "general_concept"]:
+        return ClipEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
+    if args.task in ["artwork", "artist_concept"]:
+        return ArtworkEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
     if args.task == "i2p":
         return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
     if args.task == "coco":
@@ -139,6 +146,7 @@ def infer_with_spm(
     base_model: str = "CompVis/stable-diffusion-v1-4",
     v2: bool = False,
     precision: str = "fp32",
+    progress_desc: str = "Generating images",
 ):
     spm_model_paths = [
         lp / f"{lp.name}_last.safetensors" if lp.is_dir() else lp for lp in spm_paths
@@ -229,7 +237,7 @@ def infer_with_spm(
 
     print("Generating images...")
     with distributed_state.split_between_processes(dataloader.dataset.data) as dataset:
-        dataset = tqdm(dataset) if distributed_state.is_main_process else dataset
+        dataset = tqdm(dataset, desc=progress_desc) if distributed_state.is_main_process else dataset
         for cfg in dataset:
             # save path checking
             folder = Path(cfg['save_path']).parent
@@ -350,6 +358,7 @@ def main(args):
             base_model=args.base_model,
             v2=args.v2,
             precision=args.precision,
+            progress_desc=f"Generating {args.task} samples",
         )
         accelerator.wait_for_everyone()
 
@@ -364,15 +373,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         required=True,
-        choices=["general", "artwork", "i2p", "coco"],
+        choices=["general", "general_concept", "artwork", "artist_concept", "i2p", "coco"],
         help="Task to evaluate.",
     )
     parser.add_argument(
         "--task_args",
         nargs="*",
         help="""Extra arguments for the task. Acceptable arguments:
-            task=general: concepts(list[str]), num_templates(optional, int, default=80), num_images_per_template(optional, int, default=10);
-            task=artwork: datasets(list[str]);
+            task=general/general_concept: concepts(list[str]), num_samples(optional, int, default=20), num_images_per_template(optional, int, default=1), seed(optional, int, default=42). num_samples means how many prompts to sample at random from the full imagenet template bank.
+            task=artwork/artist_concept: datasets(list[str]), num_samples(optional, int, default=20), num_images_per_prompt(optional, int, default=1), default_seed(optional, int, default=42);
             task=i2p: None.
             task=coco: coco_image_folder(str), data_path(optional, str, default=benchmark/coco_30k.csv), clip_model(optional, str, default=ViT-B/32), clip_batch_size(optional, int, default=128).
         """,
