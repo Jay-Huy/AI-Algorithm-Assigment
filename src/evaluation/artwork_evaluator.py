@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 
 import pandas as pd
 from prettytable import PrettyTable
+from tqdm import tqdm
 
 from src.configs.generation_config import GenerationConfig
 
@@ -35,6 +36,8 @@ class ArtworkDataset(GenerationDataset):
         save_folder: str = "benchmark/generated_imgs/",
         base_cfg: GenerationConfig = GenerationConfig(),
         num_images_per_prompt: int = 20,
+        num_samples: int | None = None,
+        default_seed: int = 42,
         **kwargs,
     ) -> None:
         assert all([dataset in ARTWORK_DATASETS for dataset in datasets]), (
@@ -46,10 +49,16 @@ class ArtworkDataset(GenerationDataset):
         for dataset in datasets:
             meta[dataset] = {}
             df = pd.read_csv(ARTWORK_DATASETS[dataset])
+            if num_samples is not None:
+                df = df.head(num_samples)
             for idx, row in df.iterrows():
                 cfg = base_cfg.copy()
                 cfg.prompts = [row["prompt"]]
-                cfg.seed = row["evaluation_seed"]
+                cfg.seed = int(row.get("evaluation_seed", default_seed))
+                if "width" in row and pd.notna(row["width"]):
+                    cfg.width = int(row["width"]) - int(row["width"]) % 8
+                if "height" in row and pd.notna(row["height"]):
+                    cfg.height = int(row["height"]) - int(row["height"]) % 8
                 cfg.generate_num = num_images_per_prompt
                 cfg.save_path = os.path.join(
                     save_folder,
@@ -103,7 +112,7 @@ class ArtworkEvaluator(Evaluator):
         for dataset, data in self.img_metadata.items():
             score = 0.0
             num_images = 0
-            for prompt, img_paths in data.items():
+            for prompt, img_paths in tqdm(data.items(), desc=f"{dataset} prompts"):
                 score += clip_score(
                     img_paths,
                     [prompt] * len(img_paths) if self.eval_with_template else [dataset.replace("_", " ")] * len(img_paths),

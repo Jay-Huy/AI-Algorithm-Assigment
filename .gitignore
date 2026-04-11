@@ -172,5 +172,12 @@ generated_images/
 .vscode/
 docs/
 debug.py
+INSTRUCTION.md
+test_data.ipynb
 
 dump/
+
+# local coco prep artifacts
+captions_val2014.json
+missing_urls.txt
+coco/
