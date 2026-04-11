@@ -48,6 +48,9 @@ coverage.xml
 *.cover
 *.py,cover
 .hypothesis/
+
+# Large files to ignore
+coco.zip
 .pytest_cache/
 cover/
 
