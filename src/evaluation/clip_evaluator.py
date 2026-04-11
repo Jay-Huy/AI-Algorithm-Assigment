@@ -3,6 +3,7 @@ import os
 import random
 from argparse import ArgumentParser
 
+from cleanfid import fid
 from prettytable import PrettyTable
 from tqdm import tqdm
 
@@ -81,14 +82,58 @@ class ClipEvaluator(Evaluator):
         save_folder: str = "benchmark/generated_imgs/",
         output_path: str = "benchmark/results/",
         eval_with_template: bool = False,
+        reference_folder: str | None = None,
     ):
         super().__init__(save_folder=save_folder, output_path=output_path)
         self.img_metadata = json.load(open(os.path.join(self.save_folder, "meta.json")))
         self.eval_with_template = eval_with_template
+        self.reference_folder = reference_folder
+
+    @staticmethod
+    def _folder_has_images(folder: str) -> bool:
+        if not os.path.isdir(folder):
+            return False
+        image_exts = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
+        for filename in os.listdir(folder):
+            if filename.lower().endswith(image_exts):
+                return True
+        return False
+
+    def _resolve_reference_folder(self, concept: str) -> str | None:
+        if not self.reference_folder:
+            return None
+
+        concept_reference_folder = os.path.join(self.reference_folder, concept)
+        if self._folder_has_images(concept_reference_folder):
+            return concept_reference_folder
+        if self._folder_has_images(self.reference_folder):
+            # Fallback for flat reference folders (e.g., a single COCO image folder).
+            return self.reference_folder
+        return None
+
+    def _compute_fid_for_concept(self, concept: str) -> float | None:
+        if not self.reference_folder:
+            return None
+
+        generated_folder = os.path.join(self.save_folder, concept)
+        reference_folder = self._resolve_reference_folder(concept)
+
+        if not os.path.isdir(generated_folder):
+            raise FileNotFoundError(
+                f"Generated folder not found for concept '{concept}': {generated_folder}"
+            )
+        if reference_folder is None:
+            raise FileNotFoundError(
+                f"Reference folder not found for concept '{concept}'. Tried both "
+                f"'{os.path.join(self.reference_folder, concept)}' and '{self.reference_folder}'."
+            )
+
+        return fid.compute_fid(generated_folder, reference_folder)
 
     def evaluation(self):
         all_scores = {}
         all_cers = {}
+        all_fids = {}
         for concept, data in self.img_metadata.items():
             print(f"Evaluating concept:", concept)
             scores = accs = 0.0
@@ -114,11 +159,12 @@ class ClipEvaluator(Evaluator):
             accs /= num_all_images
             all_scores[concept] = scores
             all_cers[concept] = 1 - accs
+            all_fids[concept] = self._compute_fid_for_concept(concept)
 
         table = PrettyTable()
-        table.field_names = ["Concept", "CLIPScore", "CLIPErrorRate"]
+        table.field_names = ["Concept", "CLIPScore", "CLIPErrorRate", "FID"]
         for concept, score in all_scores.items():
-            table.add_row([concept, score, all_cers[concept]])
+            table.add_row([concept, score, all_cers[concept], all_fids[concept]])
         print(table)
 
         save_name = (
@@ -126,8 +172,13 @@ class ClipEvaluator(Evaluator):
             if self.eval_with_template
             else "evaluation_results(concept only).json"
         )
+        metrics = {
+            "CLIPScore": all_scores,
+            "CLIPErrorRate": all_cers,
+            "FID": all_fids,
+        }
         with open(os.path.join(self.output_path, save_name), "w") as f:
-            json.dump([all_scores, all_cers], f)
+            json.dump(metrics, f)
 
 
 if __name__ == "__main__":

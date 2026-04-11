@@ -31,7 +31,7 @@ Default concept run uses `num_samples=20`.
 ```bash
 accelerate launch --num_processes 1 evaluate_task.py \
   --task general_concept \
-  --task_args concepts=[superman] num_samples=20 num_images_per_template=1 seed=42 \
+  --task_args concepts=[superman] num_samples=20 num_images_per_template=1 seed=42 reference_folder=benchmark/generated_imgs/sd14_baseline_general \
   --img_save_path benchmark/generated_imgs/general_superman \
   --save_path benchmark/results/general_superman \
   --base_model CompVis/stable-diffusion-v1-4
@@ -41,7 +41,7 @@ accelerate launch --num_processes 1 evaluate_task.py \
 ```bash
 accelerate launch --num_processes 1 evaluate_task.py \
   --task general_concept \
-  --task_args concepts=[superman] num_samples=5 num_images_per_template=1 seed=42 \
+  --task_args concepts=[superman] num_samples=5 num_images_per_template=1 seed=42 reference_folder=benchmark/generated_imgs/sd14_baseline_general_dry \
   --img_save_path benchmark/generated_imgs/general_superman_dry \
   --save_path benchmark/results/general_superman_dry \
   --base_model CompVis/stable-diffusion-v1-4
@@ -55,7 +55,7 @@ Default concept run uses `num_samples=20` from the artist CSV.
 ```bash
 accelerate launch --num_processes 1 evaluate_task.py \
   --task artist_concept \
-  --task_args datasets=[vangogh] num_samples=20 num_images_per_prompt=1 default_seed=42 \
+  --task_args datasets=[vangogh] num_samples=20 num_images_per_prompt=1 default_seed=42 reference_folder=benchmark/generated_imgs/sd14_baseline_artist \
   --img_save_path benchmark/generated_imgs/artist_vangogh \
   --save_path benchmark/results/artist_vangogh \
   --base_model CompVis/stable-diffusion-v1-4
@@ -65,7 +65,7 @@ accelerate launch --num_processes 1 evaluate_task.py \
 ```bash
 accelerate launch --num_processes 1 evaluate_task.py \
   --task artist_concept \
-  --task_args datasets=[vangogh] num_samples=5 num_images_per_prompt=1 default_seed=42 \
+  --task_args datasets=[vangogh] num_samples=5 num_images_per_prompt=1 default_seed=42 reference_folder=benchmark/generated_imgs/sd14_baseline_artist_dry \
   --img_save_path benchmark/generated_imgs/artist_vangogh_dry \
   --save_path benchmark/results/artist_vangogh_dry \
   --base_model CompVis/stable-diffusion-v1-4

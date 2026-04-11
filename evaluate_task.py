@@ -97,9 +97,19 @@ def get_evaluator(args):
     task_args["output_path"] = args.save_path
 
     if args.task in ["general", "general_concept"]:
-        return ClipEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
+        return ClipEvaluator(
+            save_folder=args.img_save_path,
+            output_path=args.save_path,
+            eval_with_template=True,
+            reference_folder=task_args.get("reference_folder"),
+        )
     if args.task in ["artwork", "artist_concept"]:
-        return ArtworkEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
+        return ArtworkEvaluator(
+            save_folder=args.img_save_path,
+            output_path=args.save_path,
+            eval_with_template=True,
+            reference_folder=task_args.get("reference_folder"),
+        )
     if args.task == "i2p":
         return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
     if args.task == "coco":
@@ -380,8 +390,8 @@ if __name__ == "__main__":
         "--task_args",
         nargs="*",
         help="""Extra arguments for the task. Acceptable arguments:
-            task=general/general_concept: concepts(list[str]), num_samples(optional, int, default=20), num_images_per_template(optional, int, default=1), seed(optional, int, default=42). num_samples means how many prompts to sample at random from the full imagenet template bank.
-            task=artwork/artist_concept: datasets(list[str]), num_samples(optional, int, default=20), num_images_per_prompt(optional, int, default=1), default_seed(optional, int, default=42);
+            task=general/general_concept: concepts(list[str]), num_samples(optional, int, default=20), num_images_per_template(optional, int, default=1), seed(optional, int, default=42), reference_folder(optional, str). num_samples means how many prompts to sample at random from the full imagenet template bank.
+            task=artwork/artist_concept: datasets(list[str]), num_samples(optional, int, default=20), num_images_per_prompt(optional, int, default=1), default_seed(optional, int, default=42), reference_folder(optional, str);
             task=i2p: None.
             task=coco: coco_image_folder(str), data_path(optional, str, default=benchmark/coco_30k.csv), clip_model(optional, str, default=ViT-B/32), clip_batch_size(optional, int, default=128).
         """,
