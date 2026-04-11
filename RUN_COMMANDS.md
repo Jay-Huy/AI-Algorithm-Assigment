@@ -2,6 +2,13 @@
 
 ## 1. COCO
 
+### Create `coco_200.csv`
+```python
+import pandas as pd
+
+pd.read_csv("benchmark/coco_30k.csv").head(200).to_csv("benchmark/coco_200.csv", index=False)
+```
+
 ### Full 30k
 ```bash
 accelerate launch --num_processes 1 evaluate_task.py \

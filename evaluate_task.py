@@ -5,6 +5,7 @@ from typing import Literal
 import warnings
 
 import torch
+from safetensors.torch import load_file
 from torch.utils.data import DataLoader
 from accelerate import PartialState, Accelerator
 from tqdm import tqdm
@@ -97,7 +98,12 @@ def get_evaluator(args):
     task_args["output_path"] = args.save_path
 
     if args.task in ["general", "general_concept"]:
-        return ClipEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
+        return ClipEvaluator(
+            save_folder=args.img_save_path,
+            output_path=args.save_path,
+            eval_with_template=True,
+            reference_folder=task_args.get("reference_folder"),
+        )
     if args.task in ["artwork", "artist_concept"]:
         return ArtworkEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
     if args.task == "i2p":
@@ -142,6 +148,7 @@ def infer_with_spm(
     facilitate_factor: float = 1.0,
     assigned_multipliers: list[float] = None,
     finetuned_model_path: str = None,
+    uce_path: str = None,
     sld_target_concept: str = None,
     base_model: str = "CompVis/stable-diffusion-v1-4",
     v2: bool = False,
@@ -177,6 +184,21 @@ def infer_with_spm(
     unet.enable_xformers_memory_efficient_attention()
     unet.requires_grad_(False)
     unet.eval()
+
+    if uce_path:
+        uce_state_dict = load_file(uce_path)
+        loaded_count = 0
+        for name, module in unet.named_modules():
+            key = f"{name}.weight"
+            if key in uce_state_dict and hasattr(module, "weight") and module.weight is not None:
+                module.weight.data.copy_(
+                    uce_state_dict[key].to(device=module.weight.device, dtype=module.weight.dtype)
+                )
+                loaded_count += 1
+        if loaded_count == 0:
+            warnings.warn(f"No UCE weights were loaded from {uce_path}.")
+        else:
+            print(f"Loaded {loaded_count} UCE weights from {uce_path}")
 
     if len(spm_model_paths) > 0:
         # load the SPM models
@@ -232,7 +254,7 @@ def infer_with_spm(
             if sld_target_concept.lower() != 'i2p':
                 pipe.safety_concept = sld_target_concept
             print(f"Using SLD to erase target concept: {pipe.safety_concept}")
-    if len(spm_model_paths) == 0 and finetuned_model_path is None:
+    if len(spm_model_paths) == 0 and finetuned_model_path is None and uce_path is None:
         warnings.warn("No SPM model or finetuned model is provided, using the pretrained model directly.")
 
     print("Generating images...")
@@ -354,6 +376,7 @@ def main(args):
             facilitate_factor=args.facilitate_factor,
             assigned_multipliers=args.spm_multiplier,
             finetuned_model_path=args.ft_model_path,
+            uce_path=args.uce_path,
             sld_target_concept=args.sld_target_concept,
             base_model=args.base_model,
             v2=args.v2,
@@ -380,7 +403,7 @@ if __name__ == "__main__":
         "--task_args",
         nargs="*",
         help="""Extra arguments for the task. Acceptable arguments:
-            task=general/general_concept: concepts(list[str]), num_samples(optional, int, default=20), num_images_per_template(optional, int, default=1), seed(optional, int, default=42). num_samples means how many prompts to sample at random from the full imagenet template bank.
+            task=general/general_concept: concepts(list[str]), num_samples(optional, int, default=20), num_images_per_template(optional, int, default=1), seed(optional, int, default=42), reference_folder(optional, str, default=None). num_samples means how many prompts to sample at random from the full imagenet template bank.
             task=artwork/artist_concept: datasets(list[str]), num_samples(optional, int, default=20), num_images_per_prompt(optional, int, default=1), default_seed(optional, int, default=42);
             task=i2p: None.
             task=coco: coco_image_folder(str), data_path(optional, str, default=benchmark/coco_30k.csv), clip_model(optional, str, default=ViT-B/32), clip_batch_size(optional, int, default=128).
@@ -466,6 +489,11 @@ if __name__ == "__main__":
         "--ft_model_path",
         default=None,
         help=".pt for ESD, .bin for ConAbl, and SLD for SLD.",
+    )
+    parser.add_argument(
+        "--uce_path",
+        default=None,
+        help="Path to UCE safetensors weights to load into UNet before generation.",
     )
     parser.add_argument(
         "--sld_target_concept",
