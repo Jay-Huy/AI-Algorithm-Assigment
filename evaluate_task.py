@@ -80,8 +80,8 @@ def get_dataloader(args, num_processes=1):
         if "num_samples" in task_args and "num_images_per_prompt" not in task_args:
             task_args["num_images_per_prompt"] = 1
         task_args.setdefault("default_seed", 42)
-    elif args.task == "i2p":
-        dataset_class = I2PDataset
+    # elif args.task == "i2p":
+    #     dataset_class = I2PDataset
     elif args.task == "coco":
         dataset_class = Coco30kGenerationDataset
     else:
@@ -110,8 +110,8 @@ def get_evaluator(args):
             eval_with_template=True,
             reference_folder=task_args.get("reference_folder"),
         )
-    if args.task == "i2p":
-        return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
+    # if args.task == "i2p":
+    #     return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
     if args.task == "coco":
         return CocoEvaluator(**task_args)
     raise ValueError(f"Unknown task: {args.task}")
