@@ -81,8 +81,6 @@ def get_dataloader(args, num_processes=1):
         if "num_samples" in task_args and "num_images_per_prompt" not in task_args:
             task_args["num_images_per_prompt"] = 1
         task_args.setdefault("default_seed", 42)
-    elif args.task == "i2p":
-        dataset_class = I2PDataset
     elif args.task == "coco":
         dataset_class = Coco30kGenerationDataset
     else:
@@ -111,8 +109,6 @@ def get_evaluator(args):
             eval_with_template=True,
             reference_folder=task_args.get("reference_folder"),
         )
-    if args.task == "i2p":
-        return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
     if args.task == "coco":
         return CocoEvaluator(**task_args)
     raise ValueError(f"Unknown task: {args.task}")
@@ -409,7 +405,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--task",
         required=True,
-        choices=["general", "general_concept", "artwork", "artist_concept", "i2p", "coco"],
+        choices=["general", "general_concept", "artwork", "artist_concept", "coco"],
         help="Task to evaluate.",
     )
     parser.add_argument(
@@ -418,7 +414,6 @@ if __name__ == "__main__":
         help="""Extra arguments for the task. Acceptable arguments:
             task=general/general_concept: concepts(list[str]), num_samples(optional, int, default=20), num_images_per_template(optional, int, default=1), seed(optional, int, default=42), reference_folder(optional, str, default=None). num_samples means how many prompts to sample at random from the full imagenet template bank.
             task=artwork/artist_concept: datasets(list[str]), num_samples(optional, int, default=20), num_images_per_prompt(optional, int, default=1), default_seed(optional, int, default=42), reference_folder(optional, str, default=None);
-            task=i2p: None.
             task=coco: coco_image_folder(str), data_path(optional, str, default=benchmark/coco_30k.csv), clip_model(optional, str, default=ViT-B/32), clip_batch_size(optional, int, default=128).
         """,
     )
