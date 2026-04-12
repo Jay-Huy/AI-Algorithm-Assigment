@@ -1,8 +1,10 @@
+
 import json
 import os
 from argparse import ArgumentParser
 
 import pandas as pd
+from cleanfid import fid
 from prettytable import PrettyTable
 from tqdm import tqdm
 
@@ -102,13 +104,57 @@ class ArtworkEvaluator(Evaluator):
         save_folder: str = "benchmark/generated_imgs/",
         output_path: str = "benchmark/results/",
         eval_with_template: bool = False,
+        reference_folder: str | None = None,
     ):
         super().__init__(save_folder=save_folder, output_path=output_path)
         self.img_metadata = json.load(open(os.path.join(self.save_folder, "meta.json")))
         self.eval_with_template = eval_with_template
+        self.reference_folder = reference_folder
+
+    @staticmethod
+    def _folder_has_images(folder: str) -> bool:
+        if not os.path.isdir(folder):
+            return False
+        image_exts = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
+        for filename in os.listdir(folder):
+            if filename.lower().endswith(image_exts):
+                return True
+        return False
+
+    def _resolve_reference_folder(self, dataset: str) -> str | None:
+        if not self.reference_folder:
+            return None
+
+        dataset_reference_folder = os.path.join(self.reference_folder, dataset)
+        if self._folder_has_images(dataset_reference_folder):
+            return dataset_reference_folder
+        if self._folder_has_images(self.reference_folder):
+            # Fallback for flat reference folders (e.g., a single COCO image folder).
+            return self.reference_folder
+        return None
+
+    def _compute_fid_for_dataset(self, dataset: str) -> float | None:
+        if not self.reference_folder:
+            return None
+
+        generated_folder = os.path.join(self.save_folder, dataset)
+        reference_folder = self._resolve_reference_folder(dataset)
+
+        if not os.path.isdir(generated_folder):
+            raise FileNotFoundError(
+                f"Generated folder not found for dataset '{dataset}': {generated_folder}"
+            )
+        if reference_folder is None:
+            raise FileNotFoundError(
+                f"Reference folder not found for dataset '{dataset}'. Tried both "
+                f"'{os.path.join(self.reference_folder, dataset)}' and '{self.reference_folder}'."
+            )
+
+        return fid.compute_fid(generated_folder, reference_folder)
 
     def evaluation(self):
         scores = {}
+        fids = {}
         for dataset, data in self.img_metadata.items():
             score = 0.0
             num_images = 0
@@ -119,15 +165,16 @@ class ArtworkEvaluator(Evaluator):
                 ).mean().item() * len(img_paths)
                 num_images += len(img_paths)
             scores[dataset] = score / num_images
+            fids[dataset] = self._compute_fid_for_dataset(dataset)
 
         table = PrettyTable()
-        table.field_names = ["Dataset", "CLIPScore"]
+        table.field_names = ["Dataset", "CLIPScore", "FID"]
         for dataset, score in scores.items():
-            table.add_row([dataset, score])
+            table.add_row([dataset, score, fids[dataset]])
         print(table)
 
         with open(os.path.join(self.output_path, "scores.json"), "w") as f:
-            json.dump(scores, f)
+            json.dump({"CLIPScore": scores, "FID": fids}, f)
 
 
 if __name__ == "__main__":
