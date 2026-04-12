@@ -105,7 +105,7 @@ def get_evaluator(args):
             reference_folder=task_args.get("reference_folder"),
         )
     if args.task in ["artwork", "artist_concept"]:
-        return ArtworkEvaluator(save_folder=args.img_save_path, output_path=args.save_path, eval_with_template=True)
+        return ArtworkEvaluator(save_folder=args.img_save_path, reference_folder=task_args.get("reference_folder"), output_path=args.save_path, eval_with_template=True)
     # if args.task == "i2p":
     #     return I2PEvaluator(save_folder=args.img_save_path, output_path=args.save_path)
     if args.task == "coco":
