@@ -11,7 +11,7 @@ from src.configs.generation_config import GenerationConfig
 from .eval_util import clip_score
 
 from .evaluator import Evaluator, GenerationDataset
-
+import shutil
 
 class Coco30kGenerationDataset(GenerationDataset):
     """
@@ -63,16 +63,47 @@ class CocoEvaluator(Evaluator):
         self.clip_model = clip_model
         self.clip_batch_size = int(clip_batch_size)
 
-    def _get_reference_folder(self) -> str:
+    def _get_reference_folder(self, generated_folder: str) -> str:
+        """Build a temp reference folder containing only images matching generated IDs."""
         if not self.coco_image_folder:
             raise ValueError("coco_image_folder must be provided for COCO FID evaluation.")
 
         saved_images_path = os.path.join(self.coco_image_folder, "saved_images")
-        if os.path.isdir(saved_images_path):
-            return saved_images_path
-        if os.path.isdir(self.coco_image_folder):
-            return self.coco_image_folder
-        raise FileNotFoundError(f"COCO image folder not found: {self.coco_image_folder}")
+        source_folder = saved_images_path if os.path.isdir(saved_images_path) else self.coco_image_folder
+        if not os.path.isdir(source_folder):
+            raise FileNotFoundError(f"COCO image folder not found: {self.coco_image_folder}")
+
+        # Extract IDs from generated filenames like COCO_val2014_000000016977.jpg
+        generated_files = [f for f in os.listdir(generated_folder) if f.endswith(".jpg")]
+        ids = set()
+        for fname in generated_files:
+            try:
+                coco_id = str(int(fname.split("_")[-1].replace(".jpg", "")))
+                ids.add(coco_id)
+            except ValueError:
+                continue
+
+        print(f"Found {len(ids)} unique IDs in generated folder.")
+
+        # Create a temp folder with only the matching reference images
+        tmp_ref_folder = os.path.join(self.save_folder, "_tmp_reference")
+        os.makedirs(tmp_ref_folder, exist_ok=True)
+
+        missing = []
+        for coco_id in ids:
+            src = os.path.join(source_folder, f"{coco_id}.jpg")
+            dst = os.path.join(tmp_ref_folder, f"{coco_id}.jpg")
+            if os.path.exists(src):
+                if not os.path.exists(dst):  # avoid re-copying if already there
+                    shutil.copy2(src, dst)
+            else:
+                missing.append(coco_id)
+
+        if missing:
+            print(f"Warning: {len(missing)} reference images not found: {missing[:5]}{'...' if len(missing) > 5 else ''}")
+
+        print(f"Reference folder ready with {len(ids) - len(missing)} images.")
+        return tmp_ref_folder
 
     def _collect_generated_pairs(self, generated_folder: str):
         df = pd.read_csv(self.data_path)
@@ -122,7 +153,7 @@ class CocoEvaluator(Evaluator):
         if not os.path.isdir(generated_folder):
             raise FileNotFoundError(f"Generated COCO folder not found: {generated_folder}")
 
-        reference_folder = self._get_reference_folder()
+        reference_folder = self._get_reference_folder(generated_folder)
         fid_value = fid.compute_fid(generated_folder, reference_folder)
 
         image_paths, prompts, seeds, missing_ids = self._collect_generated_pairs(generated_folder)
