@@ -52,7 +52,7 @@ class CocoEvaluator(Evaluator):
         save_folder: str = "benchmark/generated_imgs/",
         output_path: str = "benchmark/results/",
         data_path: str = "benchmark/coco_30k.csv",
-        coco_image_folder: str = "",
+        reference_folder: str = "",
         clip_model: str = "ViT-B/32",
         clip_batch_size: int = 128,
     ):
