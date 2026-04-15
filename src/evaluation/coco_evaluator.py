@@ -59,7 +59,7 @@ class CocoEvaluator(Evaluator):
         super().__init__(save_folder=save_folder, output_path=output_path)
 
         self.data_path = data_path
-        self.coco_image_folder = coco_image_folder
+        self.coco_image_folder = reference_folder
         self.clip_model = clip_model
         self.clip_batch_size = int(clip_batch_size)
 
