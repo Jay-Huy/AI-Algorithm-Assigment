@@ -23,6 +23,8 @@ ARTWORK_DATASETS = {
     "short_niche_art": "benchmark/short_niche_art_prompts.csv",
     "short_vangogh": "benchmark/short_vangogh_prompts.csv",
     "vangogh": "benchmark/vangogh_prompts.csv",
+    "gauguin": "benchmark/gauguin_prompts.csv",
+    "monet": "benchmark/monet_prompts.csv",
     "picasso": "benchmark/picasso_prompts.csv",
     "rembrandt": "benchmark/rembrandt_prompts.csv",
     "andy_warhol": "benchmark/andy_warhol_prompts.csv",
